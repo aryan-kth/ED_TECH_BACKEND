@@ -12,7 +12,7 @@ const twilioSendOtp = async (phoneNumber, otp, body) => {
         const messageBody = body || `Your OTP code is: ${otp}`;
         const message = await client.messages.create({
             body: messageBody,
-            from: '+1 229 850 5979', // Replace with your Twilio phone number
+            from: process.env.TWILIO_PHONE_NUMBER, // Replace with your Twilio phone number
             to: phoneNumber, // The recipient's phone number
         });
         console.log('Message sent:', message.sid);
