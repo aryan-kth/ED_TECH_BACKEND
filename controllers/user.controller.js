@@ -4,6 +4,9 @@ const bcrypt = require("bcrypt");
 const otpGenerator = require("otp-generator");
 const twilioSendOtp = require("../utils/sendPhoneOtp");
 const sendOtpEmail = require("../utils/sendEmailOtp");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
+
 
 const register = async (req, res) => {
   try {
@@ -20,16 +23,22 @@ const register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Send custom SMS
-    const sendMessage = await twilioSendOtp(phone, null, "hello bhai");
-    
-    // Send custom email
-    const sendEmail = await sendOtpEmail(
+    const otp = otpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+    });
+
+    // Create OTP record
+    await OTP.create({ otp, email });
+
+    // Send OTP via email
+    await sendOtpEmail(
       email,
-      null,
-      "Welcome to Our Platform",
-      "<h1>Hello World</h1>",
-      "hello bhai"
+      otp,
+      "Verify Your Email",
+      `<h1>Email Verification</h1><p>Your verification code is: ${otp}</p>`,
+      "Please verify your email address"
     );
 
     const user = await User.create({
@@ -38,14 +47,94 @@ const register = async (req, res) => {
       email,
       password: hashedPassword,
       phone,
+      isVerified: false
     });
 
-    await user.save();
-    res.status(201).json({ message: "User registered successfully", user });
+    res.status(201).json({ 
+      message: "User registered successfully. Please check your email for verification code.",
+      user
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error registering user", error });
+    console.error('Error in register:', error);
+    res.status(500).json({ message: "Error registering user", error: error.message });
   }
 };
+
+
+
+const login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User does not exist, kindly sign up first" });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    if (!user.isVerified) {
+      return res.status(403).json({ message: "User is not verified! Please verify your email first." });
+    }
+
+    // Generate JWT access token
+    const accessToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "1h" });
+
+    // Generate refresh token
+    const refreshToken = jwt.sign({ userId: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
+
+    // Set the refresh token as HttpOnly cookie
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: false,
+      maxAge: 604800000, // 7 days expiration
+      sameSite: "None"
+    });
+
+    // Set access token in response
+    res.status(200).json({
+      message: "Login successful",
+      accessToken,
+      user: { email: user.email, name: user.name },
+    });
+
+  } catch (error) {
+    console.error('Error in login:', error);
+    res.status(500).json({ message: "Error logging in", error: error.message });
+  }
+}
+
+const refreshToken = async (req, res) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+    
+    if (!refreshToken) {
+      return res.status(403).json({ message: "No refresh token provided" });
+    }
+
+    // Verify the refresh token
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Invalid or expired refresh token" });
+      }
+
+      // Create a new access token
+      const newAccessToken = jwt.sign({ userId: decoded.userId }, process.env.JWT_SECRET, { expiresIn: "1h" });
+
+      res.status(200).json({ accessToken: newAccessToken });
+    });
+    
+  } catch (error) {
+    console.error('Error refreshing token:', error);
+    res.status(500).json({ message: "Error refreshing token", error: error.message });
+  }
+}
+
+
+
 
 const sendOtpToPhone = async (req, res) => {
   try {
@@ -85,36 +174,35 @@ const sendOtpToEmail = async (req, res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    const { phoneOtp, emailOtp, phone, email } = req.body;
+    const { otp: inputOtp, email } = req.body;
+
+    const otp = Number(inputOtp);
+
     const emailOtpData = await OTP.findOne({
       email,
-      otp: emailOtp,
-      otpType: "email",
+      otp,
     });
+    
     if (!emailOtpData) {
+      console.log('Invalid OTP - No matching OTP found');
       return res.status(400).json({ message: "Invalid OTP for email" });
     }
-    await OTP.deleteOne({ otp: emailOtp });
-    const phoneOtpData = await OTP.findOne({
-      phone,
-      otp: phoneOtp,
-      otpType: "phone",
-    });
-    if (!phoneOtpData) {
-      return res.status(400).json({ message: "Invalid OTP for phone" });
-    }
-    await OTP.deleteOne({ otp: phoneOtp });
 
-    const user = await User.findOne({ email, phone });
+    await OTP.deleteOne({ _id: emailOtpData._id });
+
+    const user = await User.findOne({ email });
     if (!user) {
+      console.log('User not found with email:', email);
       return res.status(400).json({ message: "User not found" });
     }
+
     user.isVerified = true;
     await user.save();
 
-    res.status(200).json({ message: "OTP verified successfully" });
+    return res.status(200).json({ message: "OTP verified successfully" });
   } catch (error) {
-    res.status(500).json({ message: "Error verifying OTP", error });
+    console.error('Error in verifyOtp:', error);
+    res.status(500).json({ message: "Error verifying OTP", error: error.message });
   }
 };
 
@@ -216,6 +304,8 @@ const resetPassword = async (req, res) => {
 
 module.exports = {
   register,
+  login,
+  refreshToken,
   sendOtpToPhone,
   sendOtpToEmail,
   verifyOtp,
