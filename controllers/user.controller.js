@@ -10,7 +10,7 @@ require("dotenv").config();
 
 const register = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone } = req.body;
+    const { firstName, lastName, email, password, phone,role } = req.body;
     // Check if user already exists
     let existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -47,6 +47,7 @@ const register = async (req, res) => {
       email,
       password: hashedPassword,
       phone,
+      userType:role,
       isVerified: false
     });
 
@@ -64,9 +65,9 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password,role } = req.body;
     
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email,userType:role });
     if (!user) {
       return res.status(404).json({ message: "User does not exist, kindly sign up first" });
     }
@@ -98,7 +99,7 @@ const login = async (req, res) => {
     res.status(200).json({
       message: "Login successful",
       accessToken,
-      user: { email: user.email, name: user.name },
+      user: { email: user.email,role:user.userType },
     });
 
   } catch (error) {
