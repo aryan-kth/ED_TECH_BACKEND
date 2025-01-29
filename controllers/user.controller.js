@@ -9,7 +9,7 @@ require("dotenv").config();
 
 const register = async (req, res) => {
   try {
-    const { firstName, lastName, email, password, phone, role } = req.body;
+    const { firstName, lastName, email, password, phone, role,googleAuth } = req.body;
     // Check if user already exists
     let existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -45,6 +45,7 @@ const register = async (req, res) => {
       lastName,
       email,
       password: hashedPassword,
+      googleAuth,
       phone,
       userType: role,
       isVerified: false,
@@ -79,7 +80,7 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    if (!user.isVerified) {
+    if (!user.isVerified && !user.googleAuth) {
       return res
         .status(403)
         .json({
