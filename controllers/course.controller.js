@@ -3,29 +3,60 @@ const fileUploader = require("../utils/fileUploader");
 
 const createCourse = async (req, res) => {
   try {
-    // Directly req.body ko pass kar rahe hain, mongoose validate karega
-    const newCourse = await Course.create({ ...req.body, instructor: req.user.userId });
-
-    if (!req.body.courseThumbnail) {
-      return res.status(400).json({ error: "No file selected" });
+    // Check if all required fields are present
+    const { title, description, price, category, tag, benifits, requirements } = req.body;
+    
+    if (!title || !description || !price || !category || !tag || !benifits || !requirements) {
+      return res.status(400).json({
+        message: "All fields are required",
+        receivedData: req.body
+      });
     }
 
-    // File ko Cloudinary pe upload karte hain
-    const uploadedFile = await fileUploader(req.body.courseThumbnail);
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Course thumbnail is required"
+      });
+    }
 
+    try {
+      // Upload to cloudinary
+      const result = await fileUploader(req.file.path);
 
-    res.status(201).json({ 
-      message: "Course created successfully", 
-      message: "Course thumbnail uploaded successfully",
-      url: uploadedFile.url, // Cloudinary ka URL
-      public_id: uploadedFile.public_id,
-      data: newCourse 
-    });
+      // Create course with cloudinary URL
+      const newCourse = await Course.create({
+        title,
+        description,
+        price,
+        category,
+        tag,
+        benifits: Array.isArray(benifits) ? benifits : [benifits],
+        requirements: Array.isArray(requirements) ? requirements : [requirements],
+        courseThumbnail: result.url,
+        instructor: req.user.userId
+      });
+
+      res.status(201).json({
+        message: "Course created successfully",
+        data: newCourse,
+        thumbnailInfo: {
+          url: result.secure_url,
+          public_id: result.public_id
+        }
+      });
+    } catch (uploadError) {
+      console.error("Error during file upload:", uploadError);
+      return res.status(500).json({
+        message: "Error uploading file to Cloudinary",
+        error: uploadError.message
+      });
+    }
   } catch (error) {
-    // Baaki errors ke liye generic response
-    res.status(500).json({ 
-      message: "Error creating course", 
-      error: error.message 
+    console.error("Error in createCourse:", error);
+    res.status(500).json({
+      message: "Error creating course",
+      error: error.message
     });
   }
 };
@@ -46,5 +77,3 @@ const getCourses = async (req, res) => {
 };
 
 module.exports = { createCourse,getCourses };
-
-
