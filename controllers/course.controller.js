@@ -63,7 +63,7 @@ const createCourse = async (req, res) => {
 
 const getCourses = async (req, res) => {
   try {
-    const courses = await Course.find({}).populate({path:"instructor",select:"firstName lastName email"});
+    const courses = await Course.find({}).populate({path:"instructor",select:"firstName lastName email"}).sort({createdAt:-1});
     res.status(200).json({ 
       message: "Courses fetched successfully", 
       data: courses 
