@@ -7,7 +7,10 @@ const userSchema = new mongoose.Schema({
     },
     lastName: {
         type: String,
-        required: true,
+    },
+    googleAuth:{
+        type: Boolean,
+        default: false,
     },
     email: {
         type: String,
