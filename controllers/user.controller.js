@@ -10,6 +10,7 @@ require("dotenv").config();
 const register = async (req, res) => {
   try {
     const { firstName, lastName, email, password, phone, role,googleAuth } = req.body;
+    
     // Check if user already exists
     let existingUser = await User.findOne({ email });
     if (existingUser) {

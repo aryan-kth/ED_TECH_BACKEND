@@ -1,22 +1,34 @@
 const Course = require("../models/course.model");
 const fileUploader = require("../utils/fileUploader");
+const Section = require("../models/section.model");
+const SubSection = require("../models/subSection.model");
+const User = require("../models/user.model");
 
 const createCourse = async (req, res) => {
   try {
     // Check if all required fields are present
-    const { title, description, price, category, tag, benifits, requirements } = req.body;
-    
-    if (!title || !description || !price || !category || !tag || !benifits || !requirements) {
+    const { title, description, price, category, tag, benifits, requirements } =
+      req.body;
+
+    if (
+      !title ||
+      !description ||
+      !price ||
+      !category ||
+      !tag ||
+      !benifits ||
+      !requirements
+    ) {
       return res.status(400).json({
         message: "All fields are required",
-        receivedData: req.body
+        receivedData: req.body,
       });
     }
 
     // Check if file was uploaded
     if (!req.file) {
       return res.status(400).json({
-        message: "Course thumbnail is required"
+        message: "Course thumbnail is required",
       });
     }
 
@@ -32,48 +44,136 @@ const createCourse = async (req, res) => {
         category,
         tag,
         benifits: Array.isArray(benifits) ? benifits : [benifits],
-        requirements: Array.isArray(requirements) ? requirements : [requirements],
+        requirements: Array.isArray(requirements)
+          ? requirements
+          : [requirements],
         courseThumbnail: result.url,
-        instructor: req.user.userId
+        instructor: req.user.userId,
       });
+
+      const updateUserByAddingCourse = await User.findOneAndUpdate(
+        { _id: req.user.userId },
+        { $push: { courses: newCourse._id } },
+        { new: true }
+      );
+      if (!updateUserByAddingCourse) {
+        throw new Error("Failed to update user");
+      }
 
       res.status(201).json({
         message: "Course created successfully",
         data: newCourse,
         thumbnailInfo: {
           url: result.secure_url,
-          public_id: result.public_id
-        }
+          public_id: result.public_id,
+        },
       });
     } catch (uploadError) {
       console.error("Error during file upload:", uploadError);
       return res.status(500).json({
         message: "Error uploading file to Cloudinary",
-        error: uploadError.message
+        error: uploadError.message,
       });
     }
   } catch (error) {
     console.error("Error in createCourse:", error);
     res.status(500).json({
       message: "Error creating course",
-      error: error.message
+      error: error.message,
+    });
+  }
+};
+
+const createSection = async (req, res) => {
+  try {
+    const {courseId}= req.params
+    const newSection = await Section.create({
+      ...req.body,
+      course: courseId
+    });
+
+    const updateCourse = await Course.findOneAndUpdate(
+      { _id: courseId },
+      { $push: { courseSections: newSection._id } },
+      { new: true }
+    );
+    if (!updateCourse) {
+      throw new Error("Failed to update course");
+    }
+
+    res.status(201).json({
+      message: "Section created successfully",
+      data: newSection,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+const createSubSection = async (req, res) => {
+  try {
+    const { sectionId,courseId } = req.params;
+    const { title, description } = req.body;
+
+     // Check if file was uploaded
+     if (!req.file) {
+      return res.status(400).json({
+        message: "Video is required",
+      });
+    }
+
+    console.log("req.file", req.file);
+
+    // Upload to cloudinary
+    const result = await fileUploader(req.file.path);
+
+    const newSubSection = await SubSection.create({
+      title,
+      description,
+      videoUrl: result.url,
+      section: sectionId,
+      course:courseId
+    });
+
+    const updateSection = await Section.findOneAndUpdate(
+      { _id: sectionId },
+      { $push: { subSections: newSubSection._id } },
+      { new: true }
+    );
+
+    if (!updateSection) {
+      throw new Error("Failed to update section");
+    }
+
+    res.status(201).json({
+      message: "SubSection created successfully",
+      data: newSubSection,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error creating SubSection",
+      error: error.message,
     });
   }
 };
 
 const getCourses = async (req, res) => {
   try {
-    const courses = await Course.find({}).populate({path:"instructor",select:"firstName lastName email"}).sort({createdAt:-1});
-    res.status(200).json({ 
-      message: "Courses fetched successfully", 
-      data: courses 
+    const courses = await Course.find({})
+      .populate({ path: "instructor", select: "firstName lastName email" })
+      .sort({ createdAt: -1 });
+    res.status(200).json({
+      message: "Courses fetched successfully",
+      data: courses,
     });
   } catch (error) {
-    res.status(500).json({ 
-      message: "Error fetching courses", 
-      error: error.message 
+    res.status(500).json({
+      message: "Error fetching courses",
+      error: error.message,
     });
   }
 };
 
-module.exports = { createCourse,getCourses };
+module.exports = { createCourse, getCourses,createSubSection,createSection };

@@ -41,11 +41,11 @@ const courseSchema = new mongoose.Schema({
     requirements: {
         type: [String],
         required: true
-    }, 
-    createdAt: {
-        type: Date,
-        default: Date.now
+    },
+    courseSections: {
+        type:[mongoose.Schema.Types.ObjectId],
+        ref: "Section"
     }
-});
+},{timestamps:true});
 
 module.exports = mongoose.model("Course", courseSchema);
