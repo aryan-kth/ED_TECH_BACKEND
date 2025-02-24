@@ -86,10 +86,10 @@ const createCourse = async (req, res) => {
 
 const createSection = async (req, res) => {
   try {
-    const {courseId}= req.params
+    const { courseId } = req.params;
     const newSection = await Section.create({
       ...req.body,
-      course: courseId
+      course: courseId,
     });
 
     const updateCourse = await Course.findOneAndUpdate(
@@ -112,13 +112,51 @@ const createSection = async (req, res) => {
   }
 };
 
+const getAllCourseSection = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    if (!courseId) {
+      throw new Error("Course ID is required");
+    }
+    const courseSections = await Section.find({ course: courseId }).populate({
+      path: "subSections",
+    });
+    res.status(200).json({
+      message: "Course sections fetched successfully",
+      data: courseSections,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+// const getAllSubSectionOfSection = async (req, res) => {
+//   try {
+//     const { sectionId } = req.params;
+//     if (!sectionId) {
+//       throw new Error("Section ID is required");
+//     }
+//     const subSections = await SubSection.find({ section: sectionId });
+//     res.status(200).json({
+//       message: "SubSections fetched successfully",
+//       data: subSections,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: error.message,
+//     });
+//   }
+// }
+
 const createSubSection = async (req, res) => {
   try {
-    const { sectionId,courseId } = req.params;
+    const { sectionId, courseId } = req.params;
     const { title, description } = req.body;
 
-     // Check if file was uploaded
-     if (!req.file) {
+    // Check if file was uploaded
+    if (!req.file) {
       return res.status(400).json({
         message: "Video is required",
       });
@@ -134,7 +172,7 @@ const createSubSection = async (req, res) => {
       description,
       videoUrl: result.url,
       section: sectionId,
-      course:courseId
+      course: courseId,
     });
 
     const updateSection = await Section.findOneAndUpdate(
@@ -161,11 +199,23 @@ const createSubSection = async (req, res) => {
 
 const getCourses = async (req, res) => {
   try {
-    const courses = await Course.find({})
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
+    const skip = (page - 1) * limit;
+
+    const courses = await Course.find()
       .populate({ path: "instructor", select: "firstName lastName email" })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    const totalDocuments = await Course.countDocuments();
+    const totalPages = Math.ceil(totalDocuments / limit);
+
     res.status(200).json({
       message: "Courses fetched successfully",
+      totalPages,
+      totalDocuments,
       data: courses,
     });
   } catch (error) {
@@ -176,4 +226,10 @@ const getCourses = async (req, res) => {
   }
 };
 
-module.exports = { createCourse, getCourses,createSubSection,createSection };
+module.exports = {
+  createCourse,
+  getCourses,
+  createSubSection,
+  createSection,
+  getAllCourseSection,
+};

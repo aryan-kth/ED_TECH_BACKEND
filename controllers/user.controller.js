@@ -91,7 +91,7 @@ const login = async (req, res) => {
 
     // Generate JWT access token
     const accessToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: "5h",
     });
 
     // Generate refresh token
