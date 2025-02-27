@@ -226,10 +226,34 @@ const getCourses = async (req, res) => {
   }
 };
 
+const getIndividualCourse = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id).populate({
+      path: "courseSections",
+      populate: { path: "subSections" },
+    });
+
+    if (!course) {
+      throw new Error("Course not found");
+    }
+
+    res.status(200).json({
+      message: "Course fetched successfully",
+      data: course,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching course",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createCourse,
   getCourses,
   createSubSection,
   createSection,
   getAllCourseSection,
+  getIndividualCourse,
 };
