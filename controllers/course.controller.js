@@ -249,6 +249,186 @@ const getIndividualCourse = async (req, res) => {
   }
 };
 
+const updateCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    let thumbnailUrl;
+
+    // Check if courseThumbnail is a string URL or a file
+    if (req.body.courseThumbnail && typeof req.body.courseThumbnail === 'string') {
+      // If it's a string URL, use it directly
+      thumbnailUrl = req.body.courseThumbnail;
+    } else if (req.file) {
+      // If it's a file, upload to cloudinary
+      console.log("Uploading file to Cloudinary:", req.file);
+      const result = await fileUploader(req.file);
+      thumbnailUrl = result.url;
+    } else {
+      // If neither provided, return error
+      return res.status(400).json({
+        message: "Course thumbnail is required (either as URL or file)",
+      });
+    }
+
+    // Update course with thumbnail URL and other fields
+    const updatedCourse = await Course.findByIdAndUpdate(courseId, {
+      courseThumbnail: thumbnailUrl,
+      courseName: req.body.courseName,
+      description: req.body.description,
+      price: req.body.price,
+      category: req.body.category,
+      tag: req.body.tag,
+      benifits: req.body.benifits,
+      requirements: req.body.requirements,
+      instructor: req.user.userId,
+    }, {
+      new: true,
+    });
+
+    res.status(200).json({
+      message: "Course updated successfully",
+      data: updatedCourse,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating course",
+      error: error.message,
+    });
+  }
+};
+
+const deleteCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw new Error("Course not found");
+    }
+    await course.deleteOne();
+    const deleteSections = await Section.deleteMany({ course: courseId });
+    const deleteSubSections = await SubSection.deleteMany({ course: courseId });
+    res.status(200).json({
+      message: "Course deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error deleting course",
+      error: error.message,
+    });
+  }
+}
+
+const updateSection = async (req, res) => {
+  try {
+    const { sectionId, courseId } = req.params;
+    const { title, description } = req.body;
+
+    const section = await Section.findByIdAndUpdate(sectionId, {
+      title,
+      description,
+    }, {
+      new: true,
+    });
+    res.status(200).json({
+      message: "Section updated successfully",
+      data: section,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating section",
+      error: error.message,
+    });
+  }
+}
+
+const deleteSection = async (req, res) => {
+  try {
+    const { sectionId, courseId } = req.params;
+    const section = await Section.findById(sectionId);
+    if (!section) {
+      throw new Error("Section not found");
+    }
+    await section.deleteOne();
+    const deleteSubSections = await SubSection.deleteMany({ section: sectionId });
+    const removeSectionFromCourse = await Course.findByIdAndUpdate(courseId, {
+      $pull: { courseSections: sectionId },
+    })
+    res.status(200).json({
+      message: "Section deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error deleting section",
+      error: error.message,
+    });
+  }
+}
+
+const updateSubSection = async (req, res) => {
+  try {
+    const { subSectionId, sectionId, courseId } = req.params;
+    const { title, description } = req.body; 
+
+    let videoUrl;
+
+    // Check if videoUrl is a string URL or a file
+    if (req.body.videoUrl && typeof req.body.videoUrl === 'string') {
+      // If it's a string URL, use it directly
+      videoUrl = req.body.videoUrl;
+    } else if (req.file) {
+      // If it's a file, upload to cloudinary
+      console.log("Uploading file to Cloudinary:", req.file);
+      const result = await fileUploader(req.file);
+      videoUrl = result.url;
+    } else {
+      // If neither provided, return error
+      return res.status(400).json({
+        message: "Video is required (either as URL or file)",
+      });
+    }
+
+
+    const subSection = await SubSection.findByIdAndUpdate(subSectionId, {
+      title,
+      description,
+      videoUrl
+    }, {
+      new: true,
+    });
+    res.status(200).json({
+      message: "Subsection updated successfully",
+      data: subSection,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating subsection",
+      error: error.message,
+    });
+  }
+}
+
+const deleteSubSection = async (req, res) => {
+  try {
+    const { subSectionId, sectionId, courseId } = req.params;
+    const subSection = await SubSection.findById(subSectionId);
+    if (!subSection) {
+      throw new Error("Subsection not found");
+    }
+    await subSection.deleteOne();
+    await Section.findByIdAndUpdate(sectionId, {
+      $pull: { subSections: subSectionId }
+    })
+    res.status(200).json({
+      message: "Subsection deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error deleting subsection",
+      error: error.message,
+    });
+  }
+}
+
 module.exports = {
   createCourse,
   getCourses,
@@ -256,4 +436,10 @@ module.exports = {
   createSection,
   getAllCourseSection,
   getIndividualCourse,
+  updateCourse,
+  deleteCourse,
+  updateSection,
+  deleteSection,
+  updateSubSection,
+  deleteSubSection
 };

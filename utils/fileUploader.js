@@ -5,7 +5,7 @@ const cloudinary = require("../configs/cloudinary.config");
 const fileUploader = async (file) => {
   try {
     // File ko upload karna
-    const uploadResult = await cloudinary.uploader.upload(file, {
+    const uploadResult = await cloudinary.uploader.upload(file.path, {
       folder: "lectures", // Cloudinary folder
       resource_type: "auto", // Auto-detect file type (image/video/pdf)
     });
@@ -17,7 +17,7 @@ const fileUploader = async (file) => {
     };
   } catch (error) {
     console.error("File upload failed:", error);
-    throw new Error("File upload failed");
+    throw new Error(`File upload failed: ${error.message}`);
   }
 };
 
