@@ -34,7 +34,7 @@ const createCourse = async (req, res) => {
 
     try {
       // Upload to cloudinary
-      const result = await fileUploader(req.file.path);
+      const result = await fileUploader(req.file);
 
       // Create course with cloudinary URL
       const newCourse = await Course.create({
@@ -64,7 +64,7 @@ const createCourse = async (req, res) => {
         message: "Course created successfully",
         data: newCourse,
         thumbnailInfo: {
-          url: result.secure_url,
+          url: result.url,
           public_id: result.public_id,
         },
       });
@@ -165,7 +165,7 @@ const createSubSection = async (req, res) => {
     console.log("req.file", req.file);
 
     // Upload to cloudinary
-    const result = await fileUploader(req.file.path);
+    const result = await fileUploader(req.file);
 
     const newSubSection = await SubSection.create({
       title,
@@ -321,6 +321,9 @@ const deleteCourse = async (req, res) => {
 const updateSection = async (req, res) => {
   try {
     const { sectionId, courseId } = req.params;
+    if (!sectionId || !courseId) {
+      return res.status(400).json({ error: "Missing parameters" });
+    }
     const { title, description } = req.body;
 
     const section = await Section.findByIdAndUpdate(sectionId, {
@@ -368,6 +371,7 @@ const updateSubSection = async (req, res) => {
   try {
     const { subSectionId, sectionId, courseId } = req.params;
     const { title, description } = req.body; 
+    console.log("req.body", subSectionId, sectionId);
 
     let videoUrl;
 
@@ -395,6 +399,8 @@ const updateSubSection = async (req, res) => {
     }, {
       new: true,
     });
+
+    console.log("subSection", subSection);
     res.status(200).json({
       message: "Subsection updated successfully",
       data: subSection,

@@ -52,13 +52,13 @@ router.delete(
   deleteSection
 );
 router.put(
-  "/update-subsection/:subsectionId/:sectionId/:courseId",
+  "/update-subsection/:subSectionId/:sectionId/:courseId",
   upload.single("videoUrl"),
   authMiddleware,
   updateSubSection
 );
 router.delete(
-  "/delete-subsection/:subsectionId/:sectionId/:courseId",
+  "/delete-subsection/:subSectionId/:sectionId/:courseId",
   authMiddleware,
   deleteSubSection
 );
