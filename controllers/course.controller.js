@@ -3,6 +3,7 @@ const fileUploader = require("../utils/fileUploader");
 const Section = require("../models/section.model");
 const SubSection = require("../models/subSection.model");
 const User = require("../models/user.model");
+const razorpay = require("../configs/razorpay.config");
 
 const createCourse = async (req, res) => {
   try {
@@ -435,6 +436,24 @@ const deleteSubSection = async (req, res) => {
   }
 }
 
+const createOrder = async (req, res) => {
+  try {
+    const { amount, currency } = req.body;
+
+    const options = {
+      amount: amount * 100, // Convert to paisa
+      currency,
+      receipt: `receipt_${Math.floor(Math.random() * 1000)}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+    res.json(order);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
+
 module.exports = {
   createCourse,
   getCourses,
@@ -447,5 +466,7 @@ module.exports = {
   updateSection,
   deleteSection,
   updateSubSection,
-  deleteSubSection
+  deleteSubSection,
+  createOrder
+
 };
