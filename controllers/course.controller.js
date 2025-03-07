@@ -93,14 +93,12 @@ const createSection = async (req, res) => {
       course: courseId,
     });
 
-    const updateCourse = await Course.findOneAndUpdate(
-      { _id: courseId },
-      { $push: { courseSections: newSection._id } },
-      { new: true }
-    );
+    const updateCourse = await Course.findById(courseId);
     if (!updateCourse) {
       throw new Error("Failed to update course");
     }
+    updateCourse.courseSections.push(newSection._id);
+    await updateCourse.save();
 
     res.status(201).json({
       message: "Section created successfully",
@@ -205,12 +203,12 @@ const getCourses = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const courses = await Course.find()
+    const courses = await Course.find({instructor: req.user.userId})
       .populate({ path: "instructor", select: "firstName lastName email" })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
-    const totalDocuments = await Course.countDocuments();
+    const totalDocuments = await Course.countDocuments({instructor: req.user.userId});
     const totalPages = Math.ceil(totalDocuments / limit);
 
     res.status(200).json({
@@ -256,7 +254,10 @@ const updateCourse = async (req, res) => {
     let thumbnailUrl;
 
     // Check if courseThumbnail is a string URL or a file
-    if (req.body.courseThumbnail && typeof req.body.courseThumbnail === 'string') {
+    if (
+      req.body.courseThumbnail &&
+      typeof req.body.courseThumbnail === "string"
+    ) {
       // If it's a string URL, use it directly
       thumbnailUrl = req.body.courseThumbnail;
     } else if (req.file) {
@@ -272,19 +273,23 @@ const updateCourse = async (req, res) => {
     }
 
     // Update course with thumbnail URL and other fields
-    const updatedCourse = await Course.findByIdAndUpdate(courseId, {
-      courseThumbnail: thumbnailUrl,
-      courseName: req.body.courseName,
-      description: req.body.description,
-      price: req.body.price,
-      category: req.body.category,
-      tag: req.body.tag,
-      benifits: req.body.benifits,
-      requirements: req.body.requirements,
-      instructor: req.user.userId,
-    }, {
-      new: true,
-    });
+    const updatedCourse = await Course.findByIdAndUpdate(
+      courseId,
+      {
+        courseThumbnail: thumbnailUrl,
+        courseName: req.body.courseName,
+        description: req.body.description,
+        price: req.body.price,
+        category: req.body.category,
+        tag: req.body.tag,
+        benifits: req.body.benifits,
+        requirements: req.body.requirements,
+        instructor: req.user.userId,
+      },
+      {
+        new: true,
+      }
+    );
 
     res.status(200).json({
       message: "Course updated successfully",
@@ -317,7 +322,7 @@ const deleteCourse = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 const updateSection = async (req, res) => {
   try {
@@ -327,12 +332,16 @@ const updateSection = async (req, res) => {
     }
     const { title, description } = req.body;
 
-    const section = await Section.findByIdAndUpdate(sectionId, {
-      title,
-      description,
-    }, {
-      new: true,
-    });
+    const section = await Section.findByIdAndUpdate(
+      sectionId,
+      {
+        title,
+        description,
+      },
+      {
+        new: true,
+      }
+    );
     res.status(200).json({
       message: "Section updated successfully",
       data: section,
@@ -343,7 +352,7 @@ const updateSection = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 const deleteSection = async (req, res) => {
   try {
@@ -353,10 +362,12 @@ const deleteSection = async (req, res) => {
       throw new Error("Section not found");
     }
     await section.deleteOne();
-    const deleteSubSections = await SubSection.deleteMany({ section: sectionId });
+    const deleteSubSections = await SubSection.deleteMany({
+      section: sectionId,
+    });
     const removeSectionFromCourse = await Course.findByIdAndUpdate(courseId, {
       $pull: { courseSections: sectionId },
-    })
+    });
     res.status(200).json({
       message: "Section deleted successfully",
     });
@@ -366,18 +377,18 @@ const deleteSection = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 const updateSubSection = async (req, res) => {
   try {
     const { subSectionId, sectionId, courseId } = req.params;
-    const { title, description } = req.body; 
+    const { title, description } = req.body;
     console.log("req.body", subSectionId, sectionId);
 
     let videoUrl;
 
     // Check if videoUrl is a string URL or a file
-    if (req.body.videoUrl && typeof req.body.videoUrl === 'string') {
+    if (req.body.videoUrl && typeof req.body.videoUrl === "string") {
       // If it's a string URL, use it directly
       videoUrl = req.body.videoUrl;
     } else if (req.file) {
@@ -392,14 +403,17 @@ const updateSubSection = async (req, res) => {
       });
     }
 
-
-    const subSection = await SubSection.findByIdAndUpdate(subSectionId, {
-      title,
-      description,
-      videoUrl
-    }, {
-      new: true,
-    });
+    const subSection = await SubSection.findByIdAndUpdate(
+      subSectionId,
+      {
+        title,
+        description,
+        videoUrl,
+      },
+      {
+        new: true,
+      }
+    );
 
     console.log("subSection", subSection);
     res.status(200).json({
@@ -412,7 +426,7 @@ const updateSubSection = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 const deleteSubSection = async (req, res) => {
   try {
@@ -423,8 +437,8 @@ const deleteSubSection = async (req, res) => {
     }
     await subSection.deleteOne();
     await Section.findByIdAndUpdate(sectionId, {
-      $pull: { subSections: subSectionId }
-    })
+      $pull: { subSections: subSectionId },
+    });
     res.status(200).json({
       message: "Subsection deleted successfully",
     });
@@ -434,7 +448,7 @@ const deleteSubSection = async (req, res) => {
       error: error.message,
     });
   }
-}
+};
 
 const createOrder = async (req, res) => {
   try {
@@ -452,7 +466,36 @@ const createOrder = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Internal Server Error" });
   }
-}
+};
+
+const getAllCoursesForStudent = async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
+    const skip = (page - 1) * limit;
+
+    const courses = await Course.find({courseStatus: "Published"})
+      .populate({ path: "instructor", select: "firstName lastName email" })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    const totalDocuments = await Course.countDocuments({courseStatus: "Published"});
+    const totalPages = Math.ceil(totalDocuments / limit);
+
+    res.status(200).json({
+      message: "Courses fetched successfully",
+      totalPages,
+      totalDocuments,
+      data: courses,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching courses",
+      error: error.message,
+    });
+  }
+};
 
 module.exports = {
   createCourse,
@@ -467,6 +510,6 @@ module.exports = {
   deleteSection,
   updateSubSection,
   deleteSubSection,
-  createOrder
-
+  createOrder,
+  getAllCoursesForStudent,
 };

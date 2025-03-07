@@ -11,10 +11,11 @@ const {
   deleteSection,
   updateSubSection,
   deleteSubSection,
-  createOrder
+  createOrder,
+  getAllCoursesForStudent
 } = require("../controllers/course.controller");
 const router = require("express").Router();
-const {authMiddleware,isTeacher} = require("../middleware/AuthMiddleware");
+const {authMiddleware,isTeacher,isStudent} = require("../middleware/AuthMiddleware");
 const { upload } = require("../middleware/multer.middleware");
 
 // Use upload.single for single file upload, 'courseThumbnail' is the field name
@@ -34,8 +35,8 @@ router.post(
   upload.single("videoUrl"),
   createSubSection
 );
-router.get("/get-courses", authMiddleware, getCourses);
-router.get("/individual-course/:id", authMiddleware,isTeacher, getIndividualCourse);
+router.get("/get-courses", authMiddleware, isTeacher, getCourses);
+router.get("/individual-course/:id", authMiddleware, getIndividualCourse);
 router.put(
   "/update-course/:courseId",
   authMiddleware,
@@ -70,6 +71,8 @@ router.delete(
   deleteSubSection
 );
 
-router.post("/create-order",createOrder)
 
+router.post("/create-order",authMiddleware,isStudent,createOrder)
+
+router.get("/",authMiddleware,isStudent,getAllCoursesForStudent)
 module.exports = router;
