@@ -12,7 +12,8 @@ const {
   updateSubSection,
   deleteSubSection,
   createOrder,
-  getAllCoursesForStudent
+  getAllCoursesForStudent,
+  verifyPayment
 } = require("../controllers/course.controller");
 const router = require("express").Router();
 const {authMiddleware,isTeacher,isStudent} = require("../middleware/AuthMiddleware");
@@ -51,12 +52,14 @@ router.put(
   isTeacher,
   updateSection
 );
+
 router.delete(
   "/delete-section/:sectionId/:courseId",
   authMiddleware,
   isTeacher,
   deleteSection
 );
+
 router.put(
   "/update-subsection/:subSectionId/:sectionId/:courseId",
   authMiddleware,
@@ -64,6 +67,8 @@ router.put(
   upload.single("videoUrl"),
   updateSubSection
 );
+
+
 router.delete(
   "/delete-subsection/:subSectionId/:sectionId/:courseId",
   authMiddleware,
@@ -73,6 +78,8 @@ router.delete(
 
 
 router.post("/create-order",authMiddleware,isStudent,createOrder)
+
+router.post("/verify-payment",authMiddleware,isStudent,verifyPayment)
 
 router.get("/",authMiddleware,isStudent,getAllCoursesForStudent)
 module.exports = router;

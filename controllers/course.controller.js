@@ -4,6 +4,10 @@ const Section = require("../models/section.model");
 const SubSection = require("../models/subSection.model");
 const User = require("../models/user.model");
 const razorpay = require("../configs/razorpay.config");
+const Payment = require("../models/Payment.model");
+const crypto = require("crypto");
+
+require("dotenv").config();
 
 const createCourse = async (req, res) => {
   try {
@@ -203,12 +207,14 @@ const getCourses = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const courses = await Course.find({instructor: req.user.userId})
+    const courses = await Course.find({ instructor: req.user.userId })
       .populate({ path: "instructor", select: "firstName lastName email" })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
-    const totalDocuments = await Course.countDocuments({instructor: req.user.userId});
+    const totalDocuments = await Course.countDocuments({
+      instructor: req.user.userId,
+    });
     const totalPages = Math.ceil(totalDocuments / limit);
 
     res.status(200).json({
@@ -452,7 +458,7 @@ const deleteSubSection = async (req, res) => {
 
 const createOrder = async (req, res) => {
   try {
-    const { amount, currency } = req.body;
+    const { amount, currency, courseId } = req.body;
 
     const options = {
       amount: amount * 100, // Convert to paisa
@@ -461,10 +467,61 @@ const createOrder = async (req, res) => {
     };
 
     const order = await razorpay.orders.create(options);
+
+    const payment = await Payment.create({
+      course: courseId,
+      student: req.user.userId,
+      amount,
+      orderId: order.id,
+      paymentStatus: "pending",
+    });
     res.json(order);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+// Verify payment signature
+const verifyPayment = async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body.response;
+
+    console.log("Payment details:", req.body);
+
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_API_SECRET)
+      .update(sign.toString())
+      .digest("hex");
+
+    console.log("Expected signature:", expectedSignature);
+
+    if (expectedSignature === razorpay_signature) {
+      const payment = await Payment.findOne({ orderId: razorpay_order_id });
+      if (!payment) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Payment not found" });
+      }
+      payment.paymentStatus = "success";
+      payment.paymentId = razorpay_payment_id;
+      await payment.save();
+      res.json({ success: true, message: "Payment verified successfully" });
+    } else {
+      const payment = await Payment.findOne({ orderId: razorpay_order_id });
+      if (!payment) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Payment not found" });
+      }
+      payment.paymentStatus = "failed";
+      await payment.save();
+      res.status(400).json({ success: false, message: "Invalid signature" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
 
@@ -475,12 +532,14 @@ const getAllCoursesForStudent = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const courses = await Course.find({courseStatus: "Published"})
+    const courses = await Course.find({ courseStatus: "Published" })
       .populate({ path: "instructor", select: "firstName lastName email" })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
-    const totalDocuments = await Course.countDocuments({courseStatus: "Published"});
+    const totalDocuments = await Course.countDocuments({
+      courseStatus: "Published",
+    });
     const totalPages = Math.ceil(totalDocuments / limit);
 
     res.status(200).json({
@@ -511,5 +570,6 @@ module.exports = {
   updateSubSection,
   deleteSubSection,
   createOrder,
+  verifyPayment,
   getAllCoursesForStudent,
 };
