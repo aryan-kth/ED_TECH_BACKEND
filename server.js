@@ -12,7 +12,7 @@ app.use(express.json());
 app.use(cors({
       origin: [
         "http://localhost:5173",
-        "https://ed-tech-backend-daig.onrender.com"
+        "https://ed-tech-frontend-y3sn.vercel.app"
       ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"],
