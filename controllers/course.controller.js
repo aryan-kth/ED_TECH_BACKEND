@@ -3,6 +3,11 @@ const fileUploader = require("../utils/fileUploader");
 const Section = require("../models/section.model");
 const SubSection = require("../models/subSection.model");
 const User = require("../models/user.model");
+const razorpay = require("../configs/razorpay.config");
+const Payment = require("../models/Payment.model");
+const crypto = require("crypto");
+
+require("dotenv").config();
 
 const createCourse = async (req, res) => {
   try {
@@ -34,7 +39,7 @@ const createCourse = async (req, res) => {
 
     try {
       // Upload to cloudinary
-      const result = await fileUploader(req.file.path);
+      const result = await fileUploader(req.file);
 
       // Create course with cloudinary URL
       const newCourse = await Course.create({
@@ -64,7 +69,7 @@ const createCourse = async (req, res) => {
         message: "Course created successfully",
         data: newCourse,
         thumbnailInfo: {
-          url: result.secure_url,
+          url: result.url,
           public_id: result.public_id,
         },
       });
@@ -92,14 +97,12 @@ const createSection = async (req, res) => {
       course: courseId,
     });
 
-    const updateCourse = await Course.findOneAndUpdate(
-      { _id: courseId },
-      { $push: { courseSections: newSection._id } },
-      { new: true }
-    );
+    const updateCourse = await Course.findById(courseId);
     if (!updateCourse) {
       throw new Error("Failed to update course");
     }
+    updateCourse.courseSections.push(newSection._id);
+    await updateCourse.save();
 
     res.status(201).json({
       message: "Section created successfully",
@@ -165,7 +168,7 @@ const createSubSection = async (req, res) => {
     console.log("req.file", req.file);
 
     // Upload to cloudinary
-    const result = await fileUploader(req.file.path);
+    const result = await fileUploader(req.file);
 
     const newSubSection = await SubSection.create({
       title,
@@ -204,12 +207,14 @@ const getCourses = async (req, res) => {
 
     const skip = (page - 1) * limit;
 
-    const courses = await Course.find()
+    const courses = await Course.find({ instructor: req.user.userId })
       .populate({ path: "instructor", select: "firstName lastName email" })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
-    const totalDocuments = await Course.countDocuments();
+    const totalDocuments = await Course.countDocuments({
+      instructor: req.user.userId,
+    });
     const totalPages = Math.ceil(totalDocuments / limit);
 
     res.status(200).json({
@@ -249,6 +254,308 @@ const getIndividualCourse = async (req, res) => {
   }
 };
 
+const updateCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    let thumbnailUrl;
+
+    // Check if courseThumbnail is a string URL or a file
+    if (
+      req.body.courseThumbnail &&
+      typeof req.body.courseThumbnail === "string"
+    ) {
+      // If it's a string URL, use it directly
+      thumbnailUrl = req.body.courseThumbnail;
+    } else if (req.file) {
+      // If it's a file, upload to cloudinary
+      console.log("Uploading file to Cloudinary:", req.file);
+      const result = await fileUploader(req.file);
+      thumbnailUrl = result.url;
+    } else {
+      // If neither provided, return error
+      return res.status(400).json({
+        message: "Course thumbnail is required (either as URL or file)",
+      });
+    }
+
+    // Update course with thumbnail URL and other fields
+    const updatedCourse = await Course.findByIdAndUpdate(
+      courseId,
+      {
+        courseThumbnail: thumbnailUrl,
+        courseName: req.body.courseName,
+        description: req.body.description,
+        price: req.body.price,
+        category: req.body.category,
+        tag: req.body.tag,
+        benifits: req.body.benifits,
+        requirements: req.body.requirements,
+        instructor: req.user.userId,
+      },
+      {
+        new: true,
+      }
+    );
+
+    res.status(200).json({
+      message: "Course updated successfully",
+      data: updatedCourse,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating course",
+      error: error.message,
+    });
+  }
+};
+
+const deleteCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const course = await Course.findById(courseId);
+    if (!course) {
+      throw new Error("Course not found");
+    }
+    await course.deleteOne();
+    const deleteSections = await Section.deleteMany({ course: courseId });
+    const deleteSubSections = await SubSection.deleteMany({ course: courseId });
+    res.status(200).json({
+      message: "Course deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error deleting course",
+      error: error.message,
+    });
+  }
+};
+
+const updateSection = async (req, res) => {
+  try {
+    const { sectionId, courseId } = req.params;
+    if (!sectionId || !courseId) {
+      return res.status(400).json({ error: "Missing parameters" });
+    }
+    const { title, description } = req.body;
+
+    const section = await Section.findByIdAndUpdate(
+      sectionId,
+      {
+        title,
+        description,
+      },
+      {
+        new: true,
+      }
+    );
+    res.status(200).json({
+      message: "Section updated successfully",
+      data: section,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating section",
+      error: error.message,
+    });
+  }
+};
+
+const deleteSection = async (req, res) => {
+  try {
+    const { sectionId, courseId } = req.params;
+    const section = await Section.findById(sectionId);
+    if (!section) {
+      throw new Error("Section not found");
+    }
+    await section.deleteOne();
+    const deleteSubSections = await SubSection.deleteMany({
+      section: sectionId,
+    });
+    const removeSectionFromCourse = await Course.findByIdAndUpdate(courseId, {
+      $pull: { courseSections: sectionId },
+    });
+    res.status(200).json({
+      message: "Section deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error deleting section",
+      error: error.message,
+    });
+  }
+};
+
+const updateSubSection = async (req, res) => {
+  try {
+    const { subSectionId, sectionId, courseId } = req.params;
+    const { title, description } = req.body;
+    console.log("req.body", subSectionId, sectionId);
+
+    let videoUrl;
+
+    // Check if videoUrl is a string URL or a file
+    if (req.body.videoUrl && typeof req.body.videoUrl === "string") {
+      // If it's a string URL, use it directly
+      videoUrl = req.body.videoUrl;
+    } else if (req.file) {
+      // If it's a file, upload to cloudinary
+      console.log("Uploading file to Cloudinary:", req.file);
+      const result = await fileUploader(req.file);
+      videoUrl = result.url;
+    } else {
+      // If neither provided, return error
+      return res.status(400).json({
+        message: "Video is required (either as URL or file)",
+      });
+    }
+
+    const subSection = await SubSection.findByIdAndUpdate(
+      subSectionId,
+      {
+        title,
+        description,
+        videoUrl,
+      },
+      {
+        new: true,
+      }
+    );
+
+    console.log("subSection", subSection);
+    res.status(200).json({
+      message: "Subsection updated successfully",
+      data: subSection,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error updating subsection",
+      error: error.message,
+    });
+  }
+};
+
+const deleteSubSection = async (req, res) => {
+  try {
+    const { subSectionId, sectionId, courseId } = req.params;
+    const subSection = await SubSection.findById(subSectionId);
+    if (!subSection) {
+      throw new Error("Subsection not found");
+    }
+    await subSection.deleteOne();
+    await Section.findByIdAndUpdate(sectionId, {
+      $pull: { subSections: subSectionId },
+    });
+    res.status(200).json({
+      message: "Subsection deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error deleting subsection",
+      error: error.message,
+    });
+  }
+};
+
+const createOrder = async (req, res) => {
+  try {
+    const { amount, currency, courseId } = req.body;
+
+    const options = {
+      amount: amount * 100, // Convert to paisa
+      currency,
+      receipt: `receipt_${Math.floor(Math.random() * 1000)}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    const payment = await Payment.create({
+      course: courseId,
+      student: req.user.userId,
+      amount,
+      orderId: order.id,
+      paymentStatus: "pending",
+    });
+    res.json(order);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
+  }
+};
+
+// Verify payment signature
+const verifyPayment = async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body.response;
+
+    console.log("Payment details:", req.body);
+
+    const sign = razorpay_order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_API_SECRET)
+      .update(sign.toString())
+      .digest("hex");
+
+    console.log("Expected signature:", expectedSignature);
+
+    if (expectedSignature === razorpay_signature) {
+      const payment = await Payment.findOne({ orderId: razorpay_order_id });
+      if (!payment) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Payment not found" });
+      }
+      payment.paymentStatus = "success";
+      payment.paymentId = razorpay_payment_id;
+      await payment.save();
+      res.json({ success: true, message: "Payment verified successfully" });
+    } else {
+      const payment = await Payment.findOne({ orderId: razorpay_order_id });
+      if (!payment) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Payment not found" });
+      }
+      payment.paymentStatus = "failed";
+      await payment.save();
+      res.status(400).json({ success: false, message: "Invalid signature" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getAllCoursesForStudent = async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
+    const skip = (page - 1) * limit;
+
+    const courses = await Course.find({ courseStatus: "Published" })
+      .populate({ path: "instructor", select: "firstName lastName email" })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+    const totalDocuments = await Course.countDocuments({
+      courseStatus: "Published",
+    });
+    const totalPages = Math.ceil(totalDocuments / limit);
+
+    res.status(200).json({
+      message: "Courses fetched successfully",
+      totalPages,
+      totalDocuments,
+      data: courses,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching courses",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createCourse,
   getCourses,
@@ -256,4 +563,13 @@ module.exports = {
   createSection,
   getAllCourseSection,
   getIndividualCourse,
+  updateCourse,
+  deleteCourse,
+  updateSection,
+  deleteSection,
+  updateSubSection,
+  deleteSubSection,
+  createOrder,
+  verifyPayment,
+  getAllCoursesForStudent,
 };
