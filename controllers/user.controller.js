@@ -67,18 +67,18 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password, role } = req.body;
+    const { email, password } = req.body;
 
-    const user = await User.findOne({ email, userType: role });
+    const user = await User.findOne({ email});
     if (!user) {
       return res
         .status(404)
-        .json({ message: "User does not exist, kindly sign up first" });
+        .json({ message: "Invalid email or password" });
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(404).json({ message: "Invalid email or password" });
     }
 
     if (!user.isVerified && !user.googleAuth) {

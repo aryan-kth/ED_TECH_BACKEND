@@ -58,6 +58,10 @@ const courseSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.ObjectId],
       ref: "Section",
     },
+    students: {
+      type: [mongoose.Schema.Types.ObjectId],
+      ref: "User",
+    },
   },
   { timestamps: true }
 );
