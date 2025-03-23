@@ -508,6 +508,24 @@ const verifyPayment = async (req, res) => {
       payment.paymentStatus = "success";
       payment.paymentId = razorpay_payment_id;
       await payment.save();
+
+      const course = await Course.findById(payment.course);
+      if (!course) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Course not found" });
+      }
+      course.students.push(payment.student);
+      await course.save();
+
+      const user = await User.findById(payment.student);
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
+      }
+      user.courses.push(payment.course);
+      await user.save();
       res.json({ success: true, message: "Payment verified successfully" });
     } else {
       const payment = await Payment.findOne({ orderId: razorpay_order_id });
