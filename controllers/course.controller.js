@@ -545,19 +545,26 @@ const verifyPayment = async (req, res) => {
 
 const getAllCoursesForStudent = async (req, res) => {
   try {
+    const search = req.query.search || "";
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
 
     const skip = (page - 1) * limit;
 
-    const courses = await Course.find({ courseStatus: "Published" })
+    let query = {
+      courseStatus: "Published",
+    }
+
+    if (search) {
+      query.title = { $regex: search, $options: "i" };
+    }
+
+    const courses = await Course.find(query)
       .populate({ path: "instructor", select: "firstName lastName email" })
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
-    const totalDocuments = await Course.countDocuments({
-      courseStatus: "Published",
-    });
+    const totalDocuments = await Course.countDocuments(query);
     const totalPages = Math.ceil(totalDocuments / limit);
 
     res.status(200).json({
