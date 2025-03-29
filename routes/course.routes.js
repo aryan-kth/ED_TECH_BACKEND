@@ -81,5 +81,5 @@ router.post("/create-order",authMiddleware,isStudent,createOrder)
 
 router.post("/verify-payment",authMiddleware,isStudent,verifyPayment)
 
-router.get("/",authMiddleware,isStudent,getAllCoursesForStudent)
+router.get("/",getAllCoursesForStudent)
 module.exports = router;
